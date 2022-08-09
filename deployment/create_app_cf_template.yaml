@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 instance as a service
+Parameters:
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t4g.2xlarge # Arm based gpu machine
+    AllowedValues:
+    - t4g.2xlarge
+    - t4g.micro
+    - t4g.xlarge
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  TaskToken:
+    Description: The token from step function
+    Type: String
+    Default: token_to_be_modified
+Mappings: 
+  RegionMap: 
+    us-east-1:
+      id: ami-01747bf371bd30817
+    us-east-2:
+      id: ami-01747bf371bd30817
+    us-west-2:
+      id: ami-0a8e148ec03558c68
+    eu-central-1:
+      id: ami-01747bf371bd30817
+    eu-west-1:
+      id: ami-01747bf371bd30817
+    ap-northeast-1:
+      id: ami-01747bf371bd30817
+    ap-southeast-1:
+      id: ami-04be67a4d5cb63d4e
+Resources:
+  ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      SecurityGroups: [!Ref 'ec2SecurityGroup'] # TODO: what does this mean?
+      ImageId: !FindInMap # finding image id inside the above provide image ami id based on your region
+        - RegionMap
+        - !Ref AWS::Region
+        - id
+      IamInstanceProfile: !Ref ec2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 500
+      UserData: # do boot up user data here. Preparing env and pull code. Then package my app.
+        Fn::Base64: !Sub 
+              - |
+                #!/bin/bash -xe
+
+                HOME=/home/ubuntu
+                echo $HOME > $HOME/user_data.txt
+
+                apt -y update && apt -y upgrade
+                apt-get -y install wget build-essential checkinstall
+                apt-get install -y libreadline-gplv2-dev libncursesw5-dev libssl-dev \
+                    libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev libffi-dev zlib1g-dev
+                apt-get install python3-dev python3-pip python3-numpy -y
+                apt-get install -y build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev  libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev protobuf-compiler libgflags-dev libgoogle-glog-dev libblas-dev libhdf5-serial-dev liblmdb-dev libleveldb-dev liblapack-dev libsnappy-dev libprotobuf-dev libopenblas-dev libgtk2.0-dev libboost-dev libboost-all-dev libeigen3-dev libatlas-base-dev libne10-10 libne10-dev
+                
+                echo 'installing dependency'
+
+                #!/bin/bash
+
+                cd 
+                apt-get update
+                apt-get install -y python3 python3-distutils build-essential cmake curl ca-certificates
+                sudo pip3 install -U pip setuptools wheel
+
+                pip3 install panoramacli
+                pip3 install boto3
+                sudo pip3 install matplotlib
+                pip3 install 'attrs==19.1.0' --force-reinstall
+                pip3 install awscli
+
+                echo 'Install Docker'
+
+                apt-get update -y
+
+                apt-get install \
+                apt-transport-https \
+                ca-certificates \
+                curl \
+                gnupg \
+                lsb-release -y 
+
+                apt  install docker.io -y
+                aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 500245141608.dkr.ecr.us-west-2.amazonaws.com
+
+                echo 'start building target app - ppe'
+                aws secretsmanager get-secret-value --region ap-southeast-1 --secret-id ppe-sshkey | python3 -c 'import sys, json; print(json.load(sys.stdin)["SecretString"])' > ~/.ssh/deploy_key
+                chmod 400 ~/.ssh/deploy_key
+                cd ~/
+                ssh-keyscan github.com >> /root/.ssh/known_hosts
+                ssh-agent bash -c 'ssh-add /home/ubuntu/.ssh/deploy_key; git clone git@github.com:kevhsu-k/aws-ppe.git'
+                cd ./aws-ppe/ppe_panorama_app
+                panorama-cli import-application
+                aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 201125699002.dkr.ecr.ap-southeast-1.amazonaws.com
+                panorama-cli build  --container-asset-name ppe_panorama_app  --package-path packages/201125699002-ppe_panorama_app-1.0/
+                mkdir /root/.aws
+                echo $'[default]\nregion = ap-southeast-1' >> /root/.aws/config
+                panorama-cli package-application
+                echo "INSTALLATION COMPLETE" > $HOME/INSTALLATION_COMPLETE.txt
+                aws stepfunctions send-task-success --task-token ${TaskToken} --task-output {}
+              - TaskToken: !Ref TaskToken
+
+                
+  ec2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        CidrIp: "0.0.0.0/0"
+        FromPort: "22"
+        ToPort: "22"
+      - IpProtocol: "tcp"
+        CidrIp: "0.0.0.0/0"
+        FromPort: "8888"
+        ToPort: "8888"
+  ec2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      - arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy
+      - arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess
+      - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      - arn:aws:iam::aws:policy/AmazonRekognitionFullAccess
+      - arn:aws:iam::aws:policy/IAMFullAccess
+      - arn:aws:iam::aws:policy/AWSPanoramaFullAccess
+      - arn:aws:iam::aws:policy/SecretsManagerReadWrite # from github private repo
+      - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicFullAccess # ECR
+      - arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess # Step Function
+      AssumeRolePolicyDocument: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+  ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ec2Role
+Outputs:
+  publicName:
+    Description: Public DNSName of the EC2 instance
+    Value: !GetAtt [ec2Instance, PublicDnsName]
+  publicIp:
+    Description: Public IP address of the EC2 instance
+    Value: !GetAtt [ec2Instance, PublicIp]

@@ -27,12 +27,13 @@ log = logging.getLogger('my_logger')
 def ppe_handler(image_to_send, cor_data):
     iot_client = boto3.client('iot-data',region_name='ap-southeast-1')
     s3_client = boto3.resource('s3',region_name='ap-southeast-1')
-    random_p = boto3.client('ssm').get_parameter(Name='/ppe/random')
+    random_p = boto3.client('ssm',region_name='ap-southeast-1').get_parameter(Name='/ppe/random')
     prefix = 'ppe'
     #device_id = 'cf2533b6-2541-4347-a68c-404742578e14'
     #camera_id = 'cf2533b6-2541-4347-a68c-404742578e14'
     #bucket = 'auo-ppe-v2-event-bucket-20220428'
     bucket = 'event-' + random_p['Parameter']['Value']
+    log.info('bucket',bucket)
     device_id = 'device-edathpmcmq6itrwh72dhuu6kkq'
     camera_id = 'demo-camera-1.0-a07451ac-demo-camera'
 
@@ -199,9 +200,9 @@ class PpeIot:
             self.is_detect[stream_id] = is_overlap
         '''
         
-        #if is_overlap :
-        log.info('>>>>>>Processing')
-        log.info('People detected from camera: ' + stream_id)
-        ppe_handler(image_raw, compareData)
-        log.info('<<<<<<End of processing')
+        if is_overlap :
+            log.info('>>>>>>Processing')
+            log.info('People detected from camera: ' + stream_id)
+            ppe_handler(image_raw, compareData)
+            log.info('<<<<<<End of processing')
         #self.is_detect[stream_id] = True

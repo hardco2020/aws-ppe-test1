@@ -37,6 +37,15 @@
                 "interface": "panorama::hdmi_data_sink.hdmi0",
                 "overridable": true,
                 "launch": "onAppStart"
+            },
+            {
+                "name": "environment_variable",
+                "interface": "string",
+                "overridable": true,
+                "decorator": {
+                    "title": "environment variable for ppe",
+                    "description": "Let the application know where to send the file via the environment"
+                }
             }
         ],
         "edges": [
@@ -47,6 +56,10 @@
             {
                 "producer": "ppe_panorama_app_node.video_out",
                 "consumer": "output_node.video_in"
+            },
+            {
+                "producer": "environment_variable",
+                "consumer": "code_node.env"
             }
         ]
     }

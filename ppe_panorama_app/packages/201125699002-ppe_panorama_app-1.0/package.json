@@ -12,18 +12,19 @@
                         "type": "container",
                         "assetUri": "7a80d9b0ae5c3697d201eef3e891fc53f55c31be3a7c4c4fc7b130d1c4d46246.tar.gz",
                         "descriptorUri": "63a87b807a1a19dea23660a2e2ca168a9377b6dca80fb1bfb3e9e123702f26a8.json",
-                        "requirements": 
-                        [{
-                            "type" : "hardware_access",
-                            "inferenceAccelerators": [ 
-                                {
-                                    "deviceType": "nvhost_gpu",
-                                    "sharedResourcePolicy": {
-                                        "policy" : "allow_all"
+                        "requirements": [
+                            {
+                                "type": "hardware_access",
+                                "inferenceAccelerators": [
+                                    {
+                                        "deviceType": "nvhost_gpu",
+                                        "sharedResourcePolicy": {
+                                            "policy": "allow_all"
+                                        }
                                     }
-                                }
-                            ]
-                        }]
+                                ]
+                            }
+                        ]
                     }
                 ]
             }
@@ -37,6 +38,10 @@
                     {
                         "name": "video_in",
                         "type": "media"
+                    },
+                    {
+                        "name": "env",
+                        "type": "string"
                     }
                 ],
                 "outputs": [

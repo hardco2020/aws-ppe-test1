@@ -59,7 +59,7 @@
             },
             {
                 "producer": "environment_variable",
-                "consumer": "code_node.env"
+                "consumer": "ppe_panorama_app_node.env"
             }
         ]
     }

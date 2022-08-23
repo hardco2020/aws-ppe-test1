@@ -57,7 +57,7 @@ class ObjectDetectionApp(p.node):
         self.device_id = "device-edathpmcmq6itrwh72dhuu6kkq"
         self.camera_id = "demo-camera-1.0-a07451ac-demo-camera"
 
-        self.env = self.input.env.get()
+        self.env = self.inputs.env.get()
         self.ppe_iot_handler = PpeIot(
             self.bucket, self.device_id, self.camera_id, self.env
         )
